@@ -17,13 +17,6 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 }
 #hud .level { font-size:16px; font-weight:bold; color:#ffe94d; }
 
-#guide {
-    position:fixed; top:52%; left:50%; transform:translate(-50%,-50%);
-    color:#fff; font-size:16px; font-weight:bold; text-align:center;
-    text-shadow:0 0 8px #000, 0 0 4px #000; pointer-events:none;
-    width:90%; line-height:1.5; z-index:11;
-}
-
 #bigmsg {
     position:fixed; top:35%; left:50%; transform:translate(-50%,-50%);
     color:#ffe94d; font-size:22px; font-weight:bold; text-align:center;
@@ -66,7 +59,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
     overflow: hidden; pointer-events: none; z-index: 15; box-shadow: 0 0 10px rgba(0,255,204,0.3);
 }
 
-/* BẢNG TÊN & XẾP HẠNG NGAY DƯỚI RADAR */
+/* BẢNG XẾP HẠNG NGAY DƯỚI RADAR */
 #leaderboard {
     position: fixed; top: 140px; right: 12px; width: 120px;
     background: rgba(0, 20, 40, 0.85); border: 2px solid #00ffcc; border-radius: 8px;
@@ -97,6 +90,8 @@ progress { width:100%; height:6px; accent-color:#00ffcc; }
 #btnTraining { background:#f39c12; color:#fff; }
 #btnMulti { background:#2ecc71; color:#fff; box-shadow:0 0 10px rgba(46,204,113,0.5); }
 </style>
+<!-- KẾT NỐI SOCKET.IO CLIENT -->
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
@@ -116,7 +111,6 @@ progress { width:100%; height:6px; accent-color:#00ffcc; }
     <div class="left"><div class="level">CẤP ĐỘ: <span id="levelTxt">1</span></div></div>
 </div>
 
-<div id="guide"></div>
 <div id="bigmsg"></div>
 
 <div class="pad" id="padLeft">
@@ -185,6 +179,8 @@ resize();
 let chosenClass = 'speed';
 let playerName = 'AcePilot';
 let gameMode = 'training';
+let socket = null;
+let otherPlayers = {};
 
 function selectClass(type, el) {
     document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
@@ -324,6 +320,13 @@ function update(dt) {
 
             h.x = Math.max(50, Math.min(WORLD_WIDTH - 50, h.x));
             h.y = Math.max(50, Math.min(WORLD_HEIGHT - 50, h.y));
+
+            // Gửi tọa độ lên server nếu ở chế độ multi
+            if (socket && socket.connected) {
+                socket.emit('player_move', {
+                    x: h.x, y: h.y, angle: h.angle, level: state.level
+                });
+            }
         }
 
         if (h.landed && input.firePressed) {
@@ -455,6 +458,27 @@ function render() {
 
     if (helicopter) drawHelicopter(helicopter);
 
+    // VẼ CÁC ĐỒNG ĐỘI KHÁC KHI CHƠI MULTI
+    for (let id in otherPlayers) {
+        let p = otherPlayers[id];
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle + Math.PI / 2);
+        let s = 24;
+        ctx.fillStyle = '#2980b9'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(0, 0, s * 0.6, s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.restore();
+
+        // Tên đồng đội
+        ctx.save();
+        ctx.translate(p.x, p.y - 35);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-50, -14, 100, 18);
+        ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1; ctx.strokeRect(-50, -14, 100, 18);
+        ctx.fillStyle = '#3498db'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+        ctx.fillText(p.name + ' (Lv.' + p.level + ')', 0, -2);
+        ctx.restore();
+    }
+
     ctx.fillStyle = '#00ffcc';
     for (let b of bullets) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = '#ff3b3b';
@@ -474,7 +498,6 @@ function drawHelicopter(h) {
     ctx.rotate(h.angle + Math.PI / 2);
     const s = h.size;
 
-    // ÂM THANH & TỐC ĐỘ CÁNH QUẬT DỒN DẬP KHI BAY NHANH
     let speedFactor = Math.max(0.2, h.speed / h.maxSpeed);
     let rotorSpeed = 25 / speedFactor; 
     let rotorA = performance.now() / rotorSpeed;
@@ -501,7 +524,6 @@ function drawHelicopter(h) {
 
     ctx.restore();
 
-    // VẼ TÊN & LEVEL TRỰC TIẾP TRÊN ĐẦU MÁY BAY
     ctx.save();
     ctx.translate(h.x, h.y - 35);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
@@ -532,6 +554,12 @@ function drawRadar() {
     for (let t of tanks) {
         radarCtx.fillStyle = '#ff3b3b';
         radarCtx.fillRect(t.x * scaleX - 2, t.y * scaleY - 2, 4, 4);
+    }
+    // Vẽ đồng đội trên radar
+    for (let id in otherPlayers) {
+        let p = otherPlayers[id];
+        radarCtx.fillStyle = '#3498db';
+        radarCtx.fillRect(p.x * scaleX - 2, p.y * scaleY - 2, 4, 4);
     }
     radarCtx.fillStyle = '#00ff00';
     radarCtx.beginPath(); radarCtx.arc(helicopter.x * scaleX, helicopter.y * scaleY, 4, 0, Math.PI * 2); radarCtx.fill();
@@ -601,12 +629,25 @@ function startGame(mode) {
     helicopter = makeHelicopter();
     tanks = []; bullets = []; tBullets = [];
 
-    document.getElementById('overlay').style.display = 'none';
+    // Kích hoạt kết nối Socket.io nếu chọn chế độ thực chiến đồng đội
     if (mode === 'multi') {
-        showMsg('🌐 Chế độ Thực chiến Đồng Đội (Sẵn sàng kết nối Room)', 2.5);
+        socket = io();
+        socket.emit('join_game', { name: playerName, classType: chosenClass });
+        socket.on('update_players', (data) => {
+            let myId = socket.id;
+            otherPlayers = {};
+            for (let id in data) {
+                if (id !== myId) otherPlayers[id] = data[id];
+            }
+        });
+        showMsg('🌐 Đã kết nối phòng Thực Chiến Đồng Đội!', 2.5);
     } else {
+        if (socket) { socket.disconnect(); socket = null; }
+        otherPlayers = {};
         showMsg('🪖 Huấn Luyện Đơn: Nhấn FIRE để cất cánh!', 2.5);
     }
+
+    document.getElementById('overlay').style.display = 'none';
 }
 </script>
 </body>
