@@ -61,7 +61,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 
 /* BẢNG XẾP HẠNG NGAY DƯỚI RADAR */
 #leaderboard {
-    position: fixed; top: 140px; right: 12px; width: 120px;
+    position: fixed; top: 140px; right: 12px; width: 140px;
     background: rgba(0, 20, 40, 0.85); border: 2px solid #00ffcc; border-radius: 8px;
     padding: 6px; font-size: 11px; color: #fff; z-index: 15; pointer-events: none;
     box-shadow: 0 0 10px rgba(0,255,204,0.3); text-align: left;
@@ -102,7 +102,7 @@ progress { width:100%; height:6px; accent-color:#00ffcc; }
 <div id="leaderboard">
     <div style="font-weight:bold; color:#ffe94d; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:3px; margin-bottom:4px; text-align:center;">XẾP HẠNG</div>
     <div id="playerList">
-        <div>🚁 <span id="lblRankName">AcePilot</span></div>
+        <div>🚁 <span id="lblRankName" style="color:#ff00ff; text-shadow:0 0 6px #ff00ff; font-weight:bold;">Hoài 👑 ✔️</span></div>
         <div style="color:#00ffc8; margin-top:2px;">Địch hạ: <span id="lblKills">0</span></div>
     </div>
 </div>
@@ -146,7 +146,7 @@ progress { width:100%; height:6px; accent-color:#00ffcc; }
         </div>
     </div>
 
-    <input type="text" id="playerNameInput" placeholder="Nhập tên phi công..." value="AcePilot"><br>
+    <input type="text" id="playerNameInput" placeholder="Nhập tên phi công..." value="Hoang Phong"><br>
     
     <div class="mode-buttons">
         <button class="mode-btn" id="btnTraining" onclick="startGame('training')">🪖 HUẤN LUYỆN ĐƠN</button>
@@ -177,7 +177,7 @@ window.addEventListener('resize', resize);
 resize();
 
 let chosenClass = 'speed';
-let playerName = 'AcePilot';
+let playerName = 'Hoài 👑 ✔️';
 let gameMode = 'training';
 let socket = null;
 let otherPlayers = {};
@@ -472,8 +472,8 @@ function render() {
         // Tên đồng đội
         ctx.save();
         ctx.translate(p.x, p.y - 35);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-50, -14, 100, 18);
-        ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1; ctx.strokeRect(-50, -14, 100, 18);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-55, -14, 110, 18);
+        ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1; ctx.strokeRect(-55, -14, 110, 18);
         ctx.fillStyle = '#3498db'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
         ctx.fillText(p.name + ' (Lv.' + p.level + ')', 0, -2);
         ctx.restore();
@@ -526,12 +526,13 @@ function drawHelicopter(h) {
 
     ctx.save();
     ctx.translate(h.x, h.y - 35);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(-50, -14, 100, 18);
-    ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 1;
-    ctx.strokeRect(-50, -14, 100, 18);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(-65, -14, 130, 18);
+    ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(-65, -14, 130, 18);
 
-    ctx.fillStyle = '#00ffcc'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff00ff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+    ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 6;
     ctx.fillText(h.name + ' (Lv.' + state.level + ')', 0, -2);
     ctx.restore();
 }
@@ -617,7 +618,15 @@ bindTap(document.getElementById('btnFire'), () => { if (!state.running) return; 
 function startGame(mode) {
     initAudio();
     gameMode = mode;
-    playerName = document.getElementById('playerNameInput').value || 'AcePilot';
+    
+    // Lấy tên từ input, nếu là "Hoang Phong" hoặc để trống hoặc bất kỳ tên nào khác -> Ép thành "Hoài 👑 ✔️" cho chính chủ!
+    let rawInput = document.getElementById('playerNameInput').value.trim();
+    if (rawInput === 'Hoang Phong' || rawInput === '' || rawInput !== 'Hoài 👑 ✔️') {
+        playerName = 'Hoài 👑 ✔️';
+    } else {
+        playerName = rawInput;
+    }
+
     state.running = true;
     state.flowStarted = false;
     state.level = 1;
