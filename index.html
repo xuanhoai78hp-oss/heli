@@ -717,23 +717,23 @@ function drawRadar() {
 // BẢNG XẾP HẠNG ĐỘNG
 function updateLeaderboardUI() {
     let playersList = [
-        { name: playerName + ' (Bạn)', kills: killsCount, isPlayer: true }
+        { name: playerName + ' (Bạn)', level: state.level, isPlayer: true }
     ];
 
     for (let id in otherPlayers) {
         let op = otherPlayers[id];
-        playersList.push({ name: op.name || 'Pilots', kills: op.kills || 0, isPlayer: false });
+        playersList.push({ name: op.name || 'Pilots', level: Number(op.level) || 1, isPlayer: false });
     }
 
-    playersList.sort((a, b) => b.kills - a.kills);
+    playersList.sort((a, b) => b.level - a.level);
 
     let listHTML = '';
-    playersList.forEach((p, index) => {
+    playersList.slice(0, 5).forEach((p, index) => {
         let crown = (index === 0) ? '👑 ' : '';
         let colorStyle = (index === 0) ? 'color:#ffe94d; font-weight:bold;' : 'color:#fff;';
-        let scoreColor = p.isPlayer ? '#00ffc8' : '#ff00ff';
+        let levelColor = p.isPlayer ? '#00ffc8' : '#ff00ff';
         
-        listHTML += `<div class="lb-row" style="${colorStyle}"><span>${crown}${p.name}</span><span style="color:${scoreColor};">${p.kills} đ</span></div>`;
+        listHTML += `<div class="lb-row" style="${colorStyle}"><span>${crown}${p.name}</span><span style="color:${levelColor};">Lv. ${p.level}</span></div>`;
     });
 
     document.getElementById('lbContent').innerHTML = listHTML;
