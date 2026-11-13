@@ -793,6 +793,8 @@ function bindTap(el, fn) {
 
 bindHold(document.getElementById('btnA'), () => input.left = true, () => input.left = false);
 bindHold(document.getElementById('btnD'), () => input.right = true, () => input.right = false);
+bindTap(document.getElementById('btnW'), () => { if (helicopter) helicopter.speed = Math.min(helicopter.maxSpeed, helicopter.speed + 0.2); });
+bindTap(document.getElementById('btnS'), () => { if (helicopter) helicopter.speed = Math.max(-0.2, helicopter.speed - 0.2); });
 bindTap(document.getElementById('btnSpeedUp'), () => { if (helicopter) helicopter.speed = Math.min(helicopter.maxSpeed, helicopter.speed + 0.25); });
 bindTap(document.getElementById('btnSpeedDown'), () => { if (helicopter) helicopter.speed = Math.max(-0.2, helicopter.speed - 0.25); });
 
