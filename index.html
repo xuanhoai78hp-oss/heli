@@ -101,7 +101,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 <div id="leaderboard">
     <div style="font-weight:bold; color:#ffe94d; border-bottom:1px solid rgba(255,255,255,0.3); padding-bottom:3px; margin-bottom:5px; text-align:center;">🏆 BẢNG XẾP HẠNG</div>
     <div id="lbContent">
-        <div class="lb-row"><span>Hoài 👑 ✔️</span><span style="color:#00ffc8;">0 đ</span></div>
+        <div class="lb-row"><span>Ghost_99</span><span style="color:#00ffc8;">0 đ</span></div>
     </div>
 </div>
 
@@ -141,7 +141,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
         </div>
     </div>
 
-    <input type="text" id="playerNameInput" placeholder="Nhập tên phi công..." value="Hoài 👑 ✔️"><br>
+    <input type="text" id="playerNameInput" placeholder="Nhập tên phi công..." value="Ghost_99"><br>
     
     <div class="mode-buttons">
         <button class="mode-btn" id="btnTraining" onclick="startGame('training')">🪖 HUẤN LUYỆN ĐƠN</button>
@@ -174,7 +174,7 @@ resize();
 let selectedCountry = 'VN';
 let primaryColor = '#da251d';
 let secondaryColor = '#ffeb00';
-let playerName = 'Hoài 👑 ✔️';
+let playerName = 'Ghost_99';
 let gameMode = 'training';
 let socket = null;
 let otherPlayers = {};
@@ -244,6 +244,8 @@ function makeHelicopter() {
         speed: 0,
         maxSpeed: 1.5,
         size: 26,
+        hp: 100,
+        maxHp: 100,
         landed: true,
         name: playerName,
         primaryColor: primaryColor,
@@ -253,35 +255,34 @@ function makeHelicopter() {
 
 function spawnTanks(n) {
     for (let i = 0; i < n; i++) {
+        let tankLevelBonus = Math.min(state.level, 5);
         tanks.push({
             x: Math.random() * (WORLD_WIDTH - 600) + 300,
             y: Math.random() * (WORLD_HEIGHT - 600) + 300,
             angle: Math.random() * Math.PI * 2,
-            speed: 0.7 + (state.level * 0.1),
+            speed: 0.6 + (tankLevelBonus * 0.1),
             size: 22,
             alive: true,
-            color: i % 2 === 0 ? '#c0392b' : '#222',
+            color: i % 2 === 0 ? '#c0392b' : '#2c3e50',
             turretAngle: 0,
-            hp: 2,
+            hp: 2 + Math.floor(tankLevelBonus / 2),
+            maxHp: 2 + Math.floor(tankLevelBonus / 2),
             shootTimer: Math.random() * 2
         });
     }
 }
 
-// ==========================================
-// CẬP NHẬT 1: HỆ THỐNG BẮN ĐẠN THEO CẤP ĐỘ (1, 2, 3+)
-// ==========================================
+// BẮN ĐẠN THEO CẤP ĐỘ
 function shootBullet() {
     if (!helicopter || helicopter.landed) return;
     if (fireTimer > 0) return;
-    fireTimer = (state.level >= 3) ? 0.09 : 0.18; // Tốc độ bắn nhanh hơn ở cấp 3+
+    fireTimer = (state.level >= 3) ? 0.09 : 0.18;
 
     const b = helicopter.size + 10;
     const spawnX = helicopter.x + Math.cos(helicopter.angle) * b;
     const spawnY = helicopter.y + Math.sin(helicopter.angle) * b;
 
     if (state.level === 1) {
-        // Cấp 1: 1 viên thẳng
         bullets.push({
             x: spawnX, y: spawnY,
             vx: Math.cos(helicopter.angle) * 850,
@@ -291,7 +292,6 @@ function shootBullet() {
         beep(1100, 0.06, 'sawtooth', 0.05);
     } 
     else if (state.level === 2) {
-        // Cấp 2: Đạn Chùm (3 viên tỏa hình quạt)
         let angles = [helicopter.angle, helicopter.angle - 0.2, helicopter.angle + 0.2];
         for (let a of angles) {
             bullets.push({
@@ -304,7 +304,6 @@ function shootBullet() {
         beep(1200, 0.08, 'sawtooth', 0.06);
     } 
     else {
-        // Cấp 3+: Đạn đôi song song
         let offset = 8;
         let perpAngle = helicopter.angle + Math.PI / 2;
         let leftX = spawnX + Math.cos(perpAngle) * offset;
@@ -339,7 +338,6 @@ function loop(ts) {
     last = ts;
     if (dt > 0.05) dt = 0.05;
 
-    // Xử lý bắn liên thanh tự động khi giữ nút FIRE ở cấp độ 3+
     if (isFiring && state.running && helicopter && !helicopter.landed) {
         if (fireTimer <= 0) {
             shootBullet();
@@ -372,7 +370,7 @@ function update(dt) {
 
             if (socket && socket.connected) {
                 socket.emit('player_move', {
-                    x: h.x, y: h.y, angle: h.angle, level: state.level, kills: killsCount,
+                    x: h.x, y: h.y, angle: h.angle, level: state.level, hp: h.hp, kills: killsCount,
                     primaryColor: h.primaryColor, secondaryColor: h.secondaryColor
                 });
             }
@@ -386,11 +384,12 @@ function update(dt) {
             if (!state.flowStarted) {
                 state.flowStarted = true;
                 spawnTanks(4 + state.level * 2);
-                showMsg('🎯 Cấp độ ' + state.level + ': Tiêu diệt ít nhất 1 xe tăng địch để qua màn!', 2.5);
+                showMsg('🎯 Cấp độ ' + state.level + ': Tiêu diệt xe tăng địch, cẩn thận đạn pháo!', 2.5);
             }
         }
     }
 
+    // Cập nhật Tank địch & Tấn công người chơi
     for (let t of tanks) {
         if (!t.alive || !helicopter) continue;
         let angleToPl = Math.atan2(helicopter.y - t.y, helicopter.x - t.x);
@@ -398,12 +397,13 @@ function update(dt) {
 
         t.shootTimer -= dt;
         if (t.shootTimer <= 0) {
-            t.shootTimer = 1.8 + Math.random() * 1.5;
+            let fireInterval = Math.max(1.0, 1.8 - (state.level * 0.15));
+            t.shootTimer = fireInterval + Math.random() * 0.8;
             tBullets.push({
                 x: t.x, y: t.y,
-                vx: Math.cos(angleToPl) * 350,
-                vy: Math.sin(angleToPl) * 350,
-                life: 2.0, r: 3
+                vx: Math.cos(angleToPl) * (380 + state.level * 20),
+                vy: Math.sin(angleToPl) * (380 + state.level * 20),
+                life: 2.5, r: 4
             });
             beep(300, 0.08, 'sawtooth', 0.04);
         }
@@ -423,6 +423,7 @@ function update(dt) {
         t.y += Math.sin(t.angle) * t.speed;
     }
 
+    // Xử lý đạn của người chơi bắn tank
     for (let i = bullets.length - 1; i >= 0; i--) {
         let b = bullets[i];
         b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -441,7 +442,7 @@ function update(dt) {
                     killsCount++;
 
                     let allEnemiesDead = tanks.length === 0;
-                    if (allEnemiesDead && killsCount >= 1) {
+                    if (allEnemiesDead) {
                         state.level++;
                         document.getElementById('levelTxt').textContent = state.level;
                         showMsg('🎉 HOÀN THÀNH! LÊN CẤP ĐỘ ' + state.level + '!', 2.5);
@@ -454,6 +455,34 @@ function update(dt) {
                     beep(500, 0.05, 'square', 0.04);
                 }
                 break;
+            }
+        }
+    }
+
+    // Xử lý đạn tank địch bắn trúng người chơi
+    for (let i = tBullets.length - 1; i >= 0; i--) {
+        let tb = tBullets[i];
+        tb.x += tb.vx * dt; tb.y += tb.vy * dt; tb.life -= dt;
+        if (tb.life <= 0) { tBullets.splice(i, 1); continue; }
+
+        if (helicopter && !helicopter.landed) {
+            if (Math.hypot(tb.x - helicopter.x, tb.y - helicopter.y) < helicopter.size + tb.r) {
+                tBullets.splice(i, 1);
+                helicopter.hp -= 20;
+                burst(helicopter.x, helicopter.y, '#ff3b3b', 8);
+                beep(220, 0.1, 'sawtooth', 0.08);
+
+                // Cạn HP -> Trừ 1 Level, hồi máu, tạo giằng co
+                if (helicopter.hp <= 0) {
+                    helicopter.hp = helicopter.maxHp;
+                    if (state.level > 1) {
+                        state.level--;
+                        showMsg('💥 BỊ HẠ GỤC! Giảm xuống Cấp độ ' + state.level, 2.5);
+                    } else {
+                        showMsg('💥 BỊ HẠ GỤC! Cố gắng né đạn nhé!', 2.0);
+                    }
+                    document.getElementById('levelTxt').textContent = state.level;
+                }
             }
         }
     }
@@ -549,13 +578,21 @@ function drawAvatarJet(h) {
     ctx.beginPath(); ctx.ellipse(0, -s * 0.2, s * 0.15, s * 0.4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
+    // Hiển thị Tên, Cấp độ và Thanh HP ngay trên máy bay
     ctx.save();
-    ctx.translate(h.x, h.y - 38);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(-65, -14, 130, 18);
-    ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-65, -14, 130, 18);
+    ctx.translate(h.x, h.y - 40);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(-65, -18, 130, 24);
+    ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-65, -18, 130, 24);
+    
+    // Thanh HP nhỏ
+    let hpPercent = Math.max(0, h.hp / h.maxHp);
+    ctx.fillStyle = '#333'; ctx.fillRect(-55, -4, 110, 4);
+    ctx.fillStyle = hpPercent > 0.5 ? '#2ecc71' : (hpPercent > 0.2 ? '#f1c40f' : '#e74c3c');
+    ctx.fillRect(-55, -4, 110 * hpPercent, 4);
+
     ctx.fillStyle = '#ff00ff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
-    ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 6;
-    ctx.fillText(h.name + ' (Lv.' + state.level + ')', 0, -2);
+    ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 4;
+    ctx.fillText(h.name + ' (Lv.' + state.level + ')', 0, -8);
     ctx.restore();
 }
 
@@ -580,11 +617,16 @@ function drawOtherAvatarJet(p) {
     ctx.restore();
 
     ctx.save();
-    ctx.translate(p.x, p.y - 35);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-55, -14, 110, 18);
-    ctx.strokeStyle = pCol; ctx.lineWidth = 1; ctx.strokeRect(-55, -14, 110, 18);
+    ctx.translate(p.x, p.y - 40);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-55, -18, 110, 24);
+    ctx.strokeStyle = pCol; ctx.lineWidth = 1; ctx.strokeRect(-55, -18, 110, 24);
+
+    let opHp = p.hp !== undefined ? p.hp : 100;
+    ctx.fillStyle = '#333'; ctx.fillRect(-45, -4, 90, 4);
+    ctx.fillStyle = '#2ecc71'; ctx.fillRect(-45, -4, 90 * (opHp / 100), 4);
+
     ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
-    ctx.fillText(p.name + ' (Lv.' + (p.level || 1) + ')', 0, -2);
+    ctx.fillText((p.name || 'Pilots') + ' (Lv.' + (p.level || 1) + ')', 0, -8);
     ctx.restore();
 }
 
@@ -616,9 +658,7 @@ function drawRadar() {
     radarCtx.beginPath(); radarCtx.arc(helicopter.x * scaleX, helicopter.y * scaleY, 4, 0, Math.PI * 2); radarCtx.fill();
 }
 
-// ==========================================
-// CẬP NHẬT 2: BẢNG XẾP HẠNG ĐỘNG (TỰ ĐỘNG SẮP XẾP & GẮN VƯƠNG MIỆN 👑 TOP 1)
-// ==========================================
+// BẢNG XẾP HẠNG ĐỘNG
 function updateLeaderboardUI() {
     let playersList = [
         { name: playerName + ' (Bạn)', kills: killsCount, isPlayer: true }
@@ -629,7 +669,6 @@ function updateLeaderboardUI() {
         playersList.push({ name: op.name || 'Pilots', kills: op.kills || 0, isPlayer: false });
     }
 
-    // Sắp xếp giảm dần theo số điểm (kills)
     playersList.sort((a, b) => b.kills - a.kills);
 
     let listHTML = '';
@@ -701,9 +740,6 @@ bindHold(document.getElementById('btnD'), () => input.right = true, () => input.
 bindTap(document.getElementById('btnSpeedUp'), () => { if (helicopter) helicopter.speed = Math.min(helicopter.maxSpeed, helicopter.speed + 0.25); });
 bindTap(document.getElementById('btnSpeedDown'), () => { if (helicopter) helicopter.speed = Math.max(-0.2, helicopter.speed - 0.25); });
 
-// ==========================================
-// CẬP NHẬT 3: HỖ TRỢ GIỮ CHẶT NÚT FIRE (RAPID FIRE)
-// ==========================================
 const fireBtn = document.getElementById('btnFire');
 bindHold(fireBtn, () => {
     if (!state.running) return;
