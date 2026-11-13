@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Avatar Jet vs Tanks - Battle Arena</title>
+<title>Avatar Jet vs Tanks - Multiplayer Arena</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
 html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:Arial,sans-serif; }
@@ -59,15 +59,16 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
     overflow: hidden; pointer-events: none; z-index: 15; box-shadow: 0 0 10px rgba(0,255,204,0.3);
 }
 
-/* BẢNG XẾP HẠNG NGAY DƯỚI RADAR */
+/* BẢNG XẾP HẠNG ONLINE ĐỘNG NGAY DƯỚI RADAR */
 #leaderboard {
-    position: fixed; top: 140px; right: 12px; width: 140px;
-    background: rgba(0, 20, 40, 0.85); border: 2px solid #00ffcc; border-radius: 8px;
-    padding: 6px; font-size: 11px; color: #fff; z-index: 15; pointer-events: none;
-    box-shadow: 0 0 10px rgba(0,255,204,0.3); text-align: left;
+    position: fixed; top: 140px; right: 12px; width: 160px;
+    background: rgba(0, 20, 40, 0.9); border: 2px solid #00ffcc; border-radius: 8px;
+    padding: 8px; font-size: 11px; color: #fff; z-index: 15; pointer-events: none;
+    box-shadow: 0 0 10px rgba(0,255,204,0.3); text-align: left; max-height: 180px; overflow-y: auto;
 }
+.lb-row { display: flex; justify-content: space-between; margin-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px; }
 
-/* OVERLAY SẢNH CHỜ CHỌN QUỐC GIA */
+/* OVERLAY SẢNH CHỜ */
 #overlay {
     position:fixed; inset:0; background:rgba(10,25,40,0.96);
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -89,7 +90,6 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 #btnTraining { background:#f39c12; color:#fff; }
 #btnMulti { background:#2ecc71; color:#fff; box-shadow:0 0 10px rgba(46,204,113,0.5); }
 </style>
-<!-- KẾT NỐI SOCKET.IO CLIENT -->
 <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -97,12 +97,11 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 <canvas id="game"></canvas>
 <canvas id="radar" width="120" height="120"></canvas>
 
-<!-- BẢNG XẾP HẠNG DƯỚI RADAR -->
+<!-- BẢNG XẾP HẠNG ĐỘNG ONLINE -->
 <div id="leaderboard">
-    <div style="font-weight:bold; color:#ffe94d; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:3px; margin-bottom:4px; text-align:center;">XẾP HẠNG</div>
-    <div id="playerList">
-        <div>🚁 <span id="lblRankName" style="color:#ff00ff; text-shadow:0 0 6px #ff00ff; font-weight:bold;">Hoài 👑 ✔️</span></div>
-        <div style="color:#00ffc8; margin-top:2px;">Địch hạ: <span id="lblKills">0</span></div>
+    <div style="font-weight:bold; color:#ffe94d; border-bottom:1px solid rgba(255,255,255,0.3); padding-bottom:3px; margin-bottom:5px; text-align:center;">🏆 BẢNG XẾP HẠNG</div>
+    <div id="lbContent">
+        <div class="lb-row"><span>Hoài 👑 ✔️</span><span style="color:#00ffc8;">0 k</span></div>
     </div>
 </div>
 
@@ -244,7 +243,6 @@ function makeHelicopter() {
         angle: -Math.PI / 2,
         speed: 0,
         maxSpeed: 1.5,
-        damagePerHit: 1,
         size: 26,
         landed: true,
         name: playerName,
@@ -284,6 +282,10 @@ function fireBullet() {
         life: 1.5, r: 4
     });
     beep(1100, 0.06, 'sawtooth', 0.05);
+
+    if (socket && socket.connected) {
+        socket.emit('player_shoot', { x: helicopter.x, y: helicopter.y, angle: helicopter.angle });
+    }
 }
 
 let last = 0;
@@ -319,7 +321,8 @@ function update(dt) {
 
             if (socket && socket.connected) {
                 socket.emit('player_move', {
-                    x: h.x, y: h.y, angle: h.angle, level: state.level
+                    x: h.x, y: h.y, angle: h.angle, level: state.level, kills: killsCount,
+                    primaryColor: h.primaryColor, secondaryColor: h.secondaryColor
                 });
             }
         }
@@ -339,7 +342,6 @@ function update(dt) {
 
     for (let t of tanks) {
         if (!t.alive || !helicopter) continue;
-
         let angleToPl = Math.atan2(helicopter.y - t.y, helicopter.x - t.x);
         t.turretAngle = angleToPl;
 
@@ -386,9 +388,7 @@ function update(dt) {
                     beep(180, 0.25, 'sine', 0.1);
                     tanks = tanks.filter(item => item !== t);
                     killsCount++;
-                    document.getElementById('lblKills').textContent = killsCount;
 
-                    // Cơ chế qua màn nghiêm ngặt: Phải tiêu diệt được ít nhất 1 kẻ địch mới cho phép lên cấp
                     let allEnemiesDead = tanks.length === 0;
                     if (allEnemiesDead && killsCount >= 1) {
                         state.level++;
@@ -455,23 +455,10 @@ function render() {
 
     if (helicopter) drawAvatarJet(helicopter);
 
+    // Vẽ danh sách đồng đội với màu sắc & quốc kỳ riêng biệt
     for (let id in otherPlayers) {
         let p = otherPlayers[id];
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.angle + Math.PI / 2);
-        let s = 24;
-        ctx.fillStyle = '#2980b9'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.ellipse(0, 0, s * 0.6, s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.restore();
-
-        ctx.save();
-        ctx.translate(p.x, p.y - 35);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-55, -14, 110, 18);
-        ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1; ctx.strokeRect(-55, -14, 110, 18);
-        ctx.fillStyle = '#3498db'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
-        ctx.fillText(p.name + ' (Lv.' + p.level + ')', 0, -2);
-        ctx.restore();
+        drawOtherAvatarJet(p);
     }
 
     ctx.fillStyle = '#00ffcc';
@@ -487,78 +474,69 @@ function render() {
     ctx.restore();
 }
 
-// HÀM VẼ PHI THUYỀN PHONG CÁCH PHIM AVATAR (2 cánh lớn sweep-back + đuôi sắc sảo)
+// HÀM VẼ PHI THUYỀN RIÊNG CHO MÌNH
 function drawAvatarJet(h) {
     ctx.save();
     ctx.translate(h.x, h.y);
     ctx.rotate(h.angle + Math.PI / 2);
     const s = h.size;
 
-    // 1. Đuôi cánh nhỏ tinh tế phía sau
     ctx.fillStyle = h.secondaryColor;
     ctx.beginPath();
-    ctx.moveTo(-s * 0.3, s * 0.6);
-    ctx.lineTo(-s * 0.6, s * 1.1);
-    ctx.lineTo(-s * 0.1, s * 0.8);
-    ctx.closePath();
-    ctx.fill();
-
+    ctx.moveTo(-s * 0.3, s * 0.6); ctx.lineTo(-s * 0.6, s * 1.1); ctx.lineTo(-s * 0.1, s * 0.8); ctx.closePath(); ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(s * 0.3, s * 0.6);
-    ctx.lineTo(s * 0.6, s * 1.1);
-    ctx.lineTo(s * 0.1, s * 0.8);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(s * 0.3, s * 0.6); ctx.lineTo(s * 0.6, s * 1.1); ctx.lineTo(s * 0.1, s * 0.8); ctx.closePath(); ctx.fill();
 
-    // 2. Hai cánh lớn sweeping góc cạnh phong cách phi thuyền Avatar
     ctx.fillStyle = h.primaryColor;
     ctx.beginPath();
-    ctx.moveTo(0, -s * 1.2); // Mũi phi thuyền nhọn
-    ctx.lineTo(-s * 1.3, s * 0.3); // Cánh trái
-    ctx.lineTo(-s * 0.3, s * 0.2);
-    ctx.closePath();
-    ctx.fill();
-
+    ctx.moveTo(0, -s * 1.2); ctx.lineTo(-s * 1.3, s * 0.3); ctx.lineTo(-s * 0.3, s * 0.2); ctx.closePath(); ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(0, -s * 1.2);
-    ctx.lineTo(s * 1.3, s * 0.3); // Cánh phải
-    ctx.lineTo(s * 0.3, s * 0.2);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(0, -s * 1.2); ctx.lineTo(s * 1.3, s * 0.3); ctx.lineTo(s * 0.3, s * 0.2); ctx.closePath(); ctx.fill();
 
-    // 3. Thân chính phi thuyền thon gọn
-    ctx.fillStyle = h.secondaryColor;
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, -s * 1.3);
-    ctx.lineTo(-s * 0.3, s * 0.8);
-    ctx.lineTo(s * 0.3, s * 0.8);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = h.secondaryColor; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -s * 1.3); ctx.lineTo(-s * 0.3, s * 0.8); ctx.lineTo(s * 0.3, s * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
 
-    // 4. Buồng lái phát sáng năng lượng ảo ảnh
-    ctx.fillStyle = "#38bdf8";
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = "#38bdf8";
-    ctx.beginPath();
-    ctx.ellipse(0, -s * 0.2, s * 0.15, s * 0.4, 0, 0, Math.PI * 2);
-    ctx.fill();
-
+    ctx.fillStyle = "#38bdf8"; ctx.shadowBlur = 12; ctx.shadowColor = "#38bdf8";
+    ctx.beginPath(); ctx.ellipse(0, -s * 0.2, s * 0.15, s * 0.4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    // Tên phi công và cấp độ hiển thị trên đầu
     ctx.save();
     ctx.translate(h.x, h.y - 38);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(-65, -14, 130, 18);
-    ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 1.5;
-    ctx.strokeRect(-65, -14, 130, 18);
-
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(-65, -14, 130, 18);
+    ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-65, -14, 130, 18);
     ctx.fillStyle = '#ff00ff'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
     ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 6;
     ctx.fillText(h.name + ' (Lv.' + state.level + ')', 0, -2);
+    ctx.restore();
+}
+
+// HÀM VẼ ĐỒNG ĐỘI ONLINE VỚI MÀU SẮC RIÊNG CỦA HỌ
+function drawOtherAvatarJet(p) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle + Math.PI / 2);
+    const s = 26;
+    let pCol = p.primaryColor || '#3498db';
+    let sCol = p.secondaryColor || '#ffffff';
+
+    ctx.fillStyle = sCol;
+    ctx.beginPath(); ctx.moveTo(-s*0.3, s*0.6); ctx.lineTo(-s*0.6, s*1.1); ctx.lineTo(-s*0.1, s*0.8); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s*0.3, s*0.6); ctx.lineTo(s*0.6, s*1.1); ctx.lineTo(s*0.1, s*0.8); ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle = pCol;
+    ctx.beginPath(); ctx.moveTo(0, -s*1.2); ctx.lineTo(-s*1.3, s*0.3); ctx.lineTo(-s*0.3, s*0.2); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, -s*1.2); ctx.lineTo(s*1.3, s*0.3); ctx.lineTo(s*0.3, s*0.2); ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle = sCol; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -s*1.3); ctx.lineTo(-s*0.3, s*0.8); ctx.lineTo(s*0.3, s*0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(p.x, p.y - 35);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-55, -14, 110, 18);
+    ctx.strokeStyle = pCol; ctx.lineWidth = 1; ctx.strokeRect(-55, -14, 110, 18);
+    ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(p.name + ' (Lv.' + (p.level || 1) + ')', 0, -2);
     ctx.restore();
 }
 
@@ -588,6 +566,15 @@ function drawRadar() {
     }
     radarCtx.fillStyle = '#00ff00';
     radarCtx.beginPath(); radarCtx.arc(helicopter.x * scaleX, helicopter.y * scaleY, 4, 0, Math.PI * 2); radarCtx.fill();
+}
+
+function updateLeaderboardUI() {
+    let listHTML = `<div class="lb-row"><span>${playerName} (Bạn)</span><span style="color:#00ffc8;">${killsCount} đ</span></div>`;
+    for (let id in otherPlayers) {
+        let op = otherPlayers[id];
+        listHTML += `<div class="lb-row"><span>${op.name}</span><span style="color:#ff00ff;">${op.kills || 0} đ</span></div>`;
+    }
+    document.getElementById('lbContent').innerHTML = listHTML;
 }
 
 function burst(x, y, color, n) {
@@ -644,37 +631,33 @@ function startGame(mode) {
     gameMode = mode;
     
     let rawInput = document.getElementById('playerNameInput').value.trim();
-    if (rawInput === '' || rawInput !== 'Hoài 👑 ✔️') {
-        playerName = 'Hoài 👑 ✔️';
-    } else {
-        playerName = rawInput;
-    }
+    if (rawInput !== '') playerName = rawInput;
 
     state.running = true;
     state.flowStarted = false;
     state.level = 1;
     killsCount = 0;
     document.getElementById('levelTxt').textContent = state.level;
-    document.getElementById('lblRankName').textContent = playerName;
-    document.getElementById('lblKills').textContent = killsCount;
     
     helicopter = makeHelicopter();
     tanks = []; bullets = []; tBullets = [];
 
     if (mode === 'multi') {
         socket = io();
-        socket.emit('join_game', { name: playerName, country: selectedCountry });
+        socket.emit('join_game', { name: playerName, country: selectedCountry, primaryColor, secondaryColor });
         socket.on('update_players', (data) => {
             let myId = socket.id;
             otherPlayers = {};
             for (let id in data) {
                 if (id !== myId) otherPlayers[id] = data[id];
             }
+            updateLeaderboardUI();
         });
-        showMsg('🌐 Đã kết nối phòng Thực Chiến Đồng Đội!', 2.5);
+        showMsg('🌐 Đã kết nối phòng Thực Chiến Đồng Đội trực tuyến!', 2.5);
     } else {
         if (socket) { socket.disconnect(); socket = null; }
         otherPlayers = {};
+        updateLeaderboardUI();
         showMsg('🪖 Huấn Luyện Đơn: Nhấn FIRE để cất cánh!', 2.5);
     }
 
