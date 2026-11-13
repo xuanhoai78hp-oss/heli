@@ -61,7 +61,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 
 /* BẢNG XẾP HẠNG ONLINE ĐỘNG NGAY DƯỚI RADAR */
 #leaderboard {
-    position: fixed; top: 140px; right: 12px; width: 160px;
+    position: fixed; top: 140px; right: 12px; width: 175px;
     background: rgba(0, 20, 40, 0.9); border: 2px solid #00ffcc; border-radius: 8px;
     padding: 8px; font-size: 11px; color: #fff; z-index: 15; pointer-events: none;
     box-shadow: 0 0 10px rgba(0,255,204,0.3); text-align: left; max-height: 180px; overflow-y: auto;
@@ -101,12 +101,15 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 <div id="leaderboard">
     <div style="font-weight:bold; color:#ffe94d; border-bottom:1px solid rgba(255,255,255,0.3); padding-bottom:3px; margin-bottom:5px; text-align:center;">🏆 BẢNG XẾP HẠNG</div>
     <div id="lbContent">
-        <div class="lb-row"><span>Hoài 👑 ✔️</span><span style="color:#00ffc8;">0 k</span></div>
+        <div class="lb-row"><span>Hoài 👑 ✔️</span><span style="color:#00ffc8;">0 đ</span></div>
     </div>
 </div>
 
 <div id="hud">
-    <div class="left"><div class="level">CẤP ĐỘ: <span id="levelTxt">1</span></div></div>
+    <div class="left">
+        <div class="level">CẤP ĐỘ: <span id="levelTxt">1</span></div>
+        <div id="weaponTxt" style="font-size:12px; color:#00ffc8; margin-top:2px;">VŨ KHÍ: ĐƠN TIÊU CHUẨN</div>
+    </div>
 </div>
 
 <div id="bigmsg"></div>
@@ -124,7 +127,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 
 <div id="overlay">
     <h1>🌐 CHỌN QUỐC GIA & PHI THUYỀN AVATAR</h1>
-    <p style="font-size:13px; color:#aaa;">Chọn màu sắc quốc gia biểu trưng cho phi thuyền của bạn</p>
+    <p style="font-size:13px; color:#aaa;">Cấp 2: Bắn đạn chùm (Spread) | Cấp 3+: Bắn liên thanh tự động (Rapid Fire)</p>
     
     <div class="class-grid">
         <div class="class-card selected" onclick="selectCountry('VN', '#da251d', '#ffeb00', this)">
@@ -262,26 +265,59 @@ function spawnTanks(n) {
             alive: true,
             color: i % 2 === 0 ? '#c0392b' : '#222',
             turretAngle: 0,
-            hp: 2,
+            hp: 2 + Math.floor(state.level / 2),
             shootTimer: Math.random() * 2
         });
     }
 }
 
+// TÍNH NĂNG VŨ KHÍ MỚI THEO CẤP ĐỘ
 function fireBullet() {
     if (!helicopter || helicopter.landed) return;
     if (fireTimer > 0) return;
-    fireTimer = 0.18;
+
+    // Cấp 3 trở lên: Bắn liên thanh cực nhanh, Cấp 1-2: Tốc độ đạn chuẩn
+    fireTimer = state.level >= 3 ? 0.08 : 0.18;
 
     const b = helicopter.size + 10;
-    bullets.push({
-        x: helicopter.x + Math.cos(helicopter.angle) * b,
-        y: helicopter.y + Math.sin(helicopter.angle) * b,
-        vx: Math.cos(helicopter.angle) * 850,
-        vy: Math.sin(helicopter.angle) * 850,
-        life: 1.5, r: 4
-    });
-    beep(1100, 0.06, 'sawtooth', 0.05);
+    const startX = helicopter.x + Math.cos(helicopter.angle) * b;
+    const startY = helicopter.y + Math.sin(helicopter.angle) * b;
+
+    if (state.level === 2) {
+        // CỬA 2: BẮN ĐẠN CHÙM (3 HƯỚNG)
+        [-0.25, 0, 0.25].forEach(offset => {
+            let ang = helicopter.angle + offset;
+            bullets.push({
+                x: startX, y: startY,
+                vx: Math.cos(ang) * 800,
+                vy: Math.sin(ang) * 800,
+                life: 1.5, r: 4
+            });
+        });
+        beep(900, 0.08, 'sawtooth', 0.06);
+    } else if (state.level >= 3) {
+        // CỬA 3+: BẮN LIÊN THANH (2 TIA SONG SONG)
+        let perp = helicopter.angle + Math.PI / 2;
+        [-8, 8].forEach(shift => {
+            bullets.push({
+                x: startX + Math.cos(perp) * shift,
+                y: startY + Math.sin(perp) * shift,
+                vx: Math.cos(helicopter.angle) * 950,
+                vy: Math.sin(helicopter.angle) * 950,
+                life: 1.5, r: 3.5
+            });
+        });
+        beep(1300, 0.05, 'square', 0.04);
+    } else {
+        // CỬA 1: ĐẠN TIÊU CHUẨN
+        bullets.push({
+            x: startX, y: startY,
+            vx: Math.cos(helicopter.angle) * 850,
+            vy: Math.sin(helicopter.angle) * 850,
+            life: 1.5, r: 4
+        });
+        beep(1100, 0.06, 'sawtooth', 0.05);
+    }
 
     if (socket && socket.connected) {
         socket.emit('player_shoot', { x: helicopter.x, y: helicopter.y, angle: helicopter.angle });
@@ -305,6 +341,11 @@ requestAnimationFrame(loop);
 function update(dt) {
     if (!state.running) return;
     if (fireTimer > 0) fireTimer -= dt;
+
+    // Hỗ trợ giữ liên tục nút bắn khi ở Cấp 3+ (Liên thanh)
+    if (state.level >= 3 && input.firePressed) {
+        fireBullet();
+    }
 
     if (helicopter) {
         let h = helicopter;
@@ -335,7 +376,7 @@ function update(dt) {
             if (!state.flowStarted) {
                 state.flowStarted = true;
                 spawnTanks(4 + state.level * 2);
-                showMsg('🎯 Cấp độ ' + state.level + ': Tiêu diệt ít nhất 1 xe tăng địch để qua màn!', 2.5);
+                showMsg('🎯 Cấp độ ' + state.level + ': Tiêu diệt xe tăng để qua cửa!', 2.5);
             }
         }
     }
@@ -388,12 +429,21 @@ function update(dt) {
                     beep(180, 0.25, 'sine', 0.1);
                     tanks = tanks.filter(item => item !== t);
                     killsCount++;
+                    updateLeaderboardUI(); // Cập nhật điểm tức thì cho bản thân
 
                     let allEnemiesDead = tanks.length === 0;
-                    if (allEnemiesDead && killsCount >= 1) {
+                    if (allEnemiesDead) {
                         state.level++;
                         document.getElementById('levelTxt').textContent = state.level;
-                        showMsg('🎉 HOÀN THÀNH! LÊN CẤP ĐỘ ' + state.level + '!', 2.5);
+                        
+                        // Cập nhật thông báo vũ khí theo cửa mới
+                        let wText = "ĐƠN";
+                        if (state.level === 2) wText = "🌟 ĐẠN CHÙM (SPREAD)";
+                        else if (state.level >= 3) wText = "🔥 LIÊN THANH (RAPID FIRE)";
+                        document.getElementById('weaponTxt').textContent = 'VŨ KHÍ: ' + wText;
+
+                        showMsg('🎉 QUA CỬA! LÊN CẤP ĐỘ ' + state.level + '!\n' + (state.level === 2 ? 'MỞ KHÓA: ĐẠN CHÙM 3 TIA!' : state.level >= 3 ? 'MỞ KHÓA: BẮN LIÊN THANH TỰ ĐỘNG!' : ''), 3.0);
+                        
                         setTimeout(() => {
                             spawnTanks(4 + state.level * 2);
                         }, 1500);
@@ -455,7 +505,6 @@ function render() {
 
     if (helicopter) drawAvatarJet(helicopter);
 
-    // Vẽ danh sách đồng đội với màu sắc & quốc kỳ riêng biệt
     for (let id in otherPlayers) {
         let p = otherPlayers[id];
         drawOtherAvatarJet(p);
@@ -474,7 +523,6 @@ function render() {
     ctx.restore();
 }
 
-// HÀM VẼ PHI THUYỀN RIÊNG CHO MÌNH
 function drawAvatarJet(h) {
     ctx.save();
     ctx.translate(h.x, h.y);
@@ -510,7 +558,6 @@ function drawAvatarJet(h) {
     ctx.restore();
 }
 
-// HÀM VẼ ĐỒNG ĐỘI ONLINE VỚI MÀU SẮC RIÊNG CỦA HỌ
 function drawOtherAvatarJet(p) {
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -568,12 +615,24 @@ function drawRadar() {
     radarCtx.beginPath(); radarCtx.arc(helicopter.x * scaleX, helicopter.y * scaleY, 4, 0, Math.PI * 2); radarCtx.fill();
 }
 
+// BẢNG XẾP HẠNG ĐỘNG CHUẨN ĐỒNG BỘ ĐIỂM SỐ
 function updateLeaderboardUI() {
-    let listHTML = `<div class="lb-row"><span>${playerName} (Bạn)</span><span style="color:#00ffc8;">${killsCount} đ</span></div>`;
+    // Thu thập tất cả người chơi thành một mảng để sắp xếp theo điểm (kills) giảm dần
+    let allP = [{ name: playerName + ' (Bạn)', kills: killsCount, isMe: true }];
     for (let id in otherPlayers) {
         let op = otherPlayers[id];
-        listHTML += `<div class="lb-row"><span>${op.name}</span><span style="color:#ff00ff;">${op.kills || 0} đ</span></div>`;
+        allP.push({ name: op.name, kills: op.kills || 0, isMe: false });
     }
+
+    allP.sort((a, b) => b.kills - a.kills);
+
+    let listHTML = '';
+    allP.forEach((p, idx) => {
+        let color = p.isMe ? '#00ffc8' : '#ff00ff';
+        let rankIcon = idx === 0 ? '👑 ' : '';
+        listHTML += `<div class="lb-row"><span style="color:${color}">${rankIcon}${p.name}</span><span style="color:${color};">${p.kills} đ</span></div>`;
+    });
+
     document.getElementById('lbContent').innerHTML = listHTML;
 }
 
@@ -604,6 +663,7 @@ window.addEventListener('keyup', e => {
     let k = e.key.toLowerCase();
     if (k === 'a') input.left = false;
     if (k === 'd') input.right = false;
+    if (e.code === 'Space') { input.firePressed = false; }
 });
 
 function bindHold(el, onDown, onUp) {
@@ -622,9 +682,10 @@ function bindTap(el, fn) {
 
 bindHold(document.getElementById('btnA'), () => input.left = true, () => input.left = false);
 bindHold(document.getElementById('btnD'), () => input.right = true, () => input.right = false);
+bindHold(document.getElementById('btnFire'), () => input.firePressed = true, () => input.firePressed = false);
+
 bindTap(document.getElementById('btnSpeedUp'), () => { if (helicopter) helicopter.speed = Math.min(helicopter.maxSpeed, helicopter.speed + 0.25); });
 bindTap(document.getElementById('btnSpeedDown'), () => { if (helicopter) helicopter.speed = Math.max(-0.2, helicopter.speed - 0.25); });
-bindTap(document.getElementById('btnFire'), () => { if (!state.running) return; input.firePressed = true; fireBullet(); });
 
 function startGame(mode) {
     initAudio();
@@ -638,6 +699,7 @@ function startGame(mode) {
     state.level = 1;
     killsCount = 0;
     document.getElementById('levelTxt').textContent = state.level;
+    document.getElementById('weaponTxt').textContent = 'VŨ KHÍ: ĐƠN TIÊU CHUẨN';
     
     helicopter = makeHelicopter();
     tanks = []; bullets = []; tBullets = [];
