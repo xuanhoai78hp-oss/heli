@@ -61,7 +61,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 
 /* BẢNG XẾP HẠNG ONLINE ĐỘNG NGAY DƯỚI RADAR */
 #leaderboard {
-    position: fixed; top: 140px; right: 12px; width: 160px;
+    position: fixed; top: 140px; right: 12px; width: 175px;
     background: rgba(0, 20, 40, 0.9); border: 2px solid #00ffcc; border-radius: 8px;
     padding: 8px; font-size: 11px; color: #fff; z-index: 15; pointer-events: none;
     box-shadow: 0 0 10px rgba(0,255,204,0.3); text-align: left; max-height: 180px; overflow-y: auto;
@@ -101,7 +101,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 <div id="leaderboard">
     <div style="font-weight:bold; color:#ffe94d; border-bottom:1px solid rgba(255,255,255,0.3); padding-bottom:3px; margin-bottom:5px; text-align:center;">🏆 BẢNG XẾP HẠNG</div>
     <div id="lbContent">
-        <div class="lb-row"><span>Hoài 👑 ✔️</span><span style="color:#00ffc8;">0 k</span></div>
+        <div class="lb-row"><span>Hoài 👑 ✔️</span><span style="color:#00ffc8;">0 đ</span></div>
     </div>
 </div>
 
@@ -268,20 +268,64 @@ function spawnTanks(n) {
     }
 }
 
-function fireBullet() {
+// ==========================================
+// CẬP NHẬT 1: HỆ THỐNG BẮN ĐẠN THEO CẤP ĐỘ (1, 2, 3+)
+// ==========================================
+function shootBullet() {
     if (!helicopter || helicopter.landed) return;
     if (fireTimer > 0) return;
-    fireTimer = 0.18;
+    fireTimer = (state.level >= 3) ? 0.09 : 0.18; // Tốc độ bắn nhanh hơn ở cấp 3+
 
     const b = helicopter.size + 10;
-    bullets.push({
-        x: helicopter.x + Math.cos(helicopter.angle) * b,
-        y: helicopter.y + Math.sin(helicopter.angle) * b,
-        vx: Math.cos(helicopter.angle) * 850,
-        vy: Math.sin(helicopter.angle) * 850,
-        life: 1.5, r: 4
-    });
-    beep(1100, 0.06, 'sawtooth', 0.05);
+    const spawnX = helicopter.x + Math.cos(helicopter.angle) * b;
+    const spawnY = helicopter.y + Math.sin(helicopter.angle) * b;
+
+    if (state.level === 1) {
+        // Cấp 1: 1 viên thẳng
+        bullets.push({
+            x: spawnX, y: spawnY,
+            vx: Math.cos(helicopter.angle) * 850,
+            vy: Math.sin(helicopter.angle) * 850,
+            life: 1.5, r: 4
+        });
+        beep(1100, 0.06, 'sawtooth', 0.05);
+    } 
+    else if (state.level === 2) {
+        // Cấp 2: Đạn Chùm (3 viên tỏa hình quạt)
+        let angles = [helicopter.angle, helicopter.angle - 0.2, helicopter.angle + 0.2];
+        for (let a of angles) {
+            bullets.push({
+                x: spawnX, y: spawnY,
+                vx: Math.cos(a) * 850,
+                vy: Math.sin(a) * 850,
+                life: 1.5, r: 4
+            });
+        }
+        beep(1200, 0.08, 'sawtooth', 0.06);
+    } 
+    else {
+        // Cấp 3+: Đạn đôi song song
+        let offset = 8;
+        let perpAngle = helicopter.angle + Math.PI / 2;
+        let leftX = spawnX + Math.cos(perpAngle) * offset;
+        let leftY = spawnY + Math.sin(perpAngle) * offset;
+        let rightX = spawnX - Math.cos(perpAngle) * offset;
+        let rightY = spawnY - Math.sin(perpAngle) * offset;
+
+        bullets.push({
+            x: leftX, y: leftY,
+            vx: Math.cos(helicopter.angle) * 900,
+            vy: Math.sin(helicopter.angle) * 900,
+            life: 1.5, r: 4
+        });
+        bullets.push({
+            x: rightX, y: rightY,
+            vx: Math.cos(helicopter.angle) * 900,
+            vy: Math.sin(helicopter.angle) * 900,
+            life: 1.5, r: 4
+        });
+        beep(1300, 0.05, 'sawtooth', 0.06);
+    }
 
     if (socket && socket.connected) {
         socket.emit('player_shoot', { x: helicopter.x, y: helicopter.y, angle: helicopter.angle });
@@ -294,6 +338,13 @@ function loop(ts) {
     let dt = (ts - last) / 1000;
     last = ts;
     if (dt > 0.05) dt = 0.05;
+
+    // Xử lý bắn liên thanh tự động khi giữ nút FIRE ở cấp độ 3+
+    if (isFiring && state.running && helicopter && !helicopter.landed) {
+        if (fireTimer <= 0) {
+            shootBullet();
+        }
+    }
 
     update(dt);
     render();
@@ -455,7 +506,6 @@ function render() {
 
     if (helicopter) drawAvatarJet(helicopter);
 
-    // Vẽ danh sách đồng đội với màu sắc & quốc kỳ riêng biệt
     for (let id in otherPlayers) {
         let p = otherPlayers[id];
         drawOtherAvatarJet(p);
@@ -474,7 +524,6 @@ function render() {
     ctx.restore();
 }
 
-// HÀM VẼ PHI THUYỀN RIÊNG CHO MÌNH
 function drawAvatarJet(h) {
     ctx.save();
     ctx.translate(h.x, h.y);
@@ -510,7 +559,6 @@ function drawAvatarJet(h) {
     ctx.restore();
 }
 
-// HÀM VẼ ĐỒNG ĐỘI ONLINE VỚI MÀU SẮC RIÊNG CỦA HỌ
 function drawOtherAvatarJet(p) {
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -568,12 +616,31 @@ function drawRadar() {
     radarCtx.beginPath(); radarCtx.arc(helicopter.x * scaleX, helicopter.y * scaleY, 4, 0, Math.PI * 2); radarCtx.fill();
 }
 
+// ==========================================
+// CẬP NHẬT 2: BẢNG XẾP HẠNG ĐỘNG (TỰ ĐỘNG SẮP XẾP & GẮN VƯƠNG MIỆN 👑 TOP 1)
+// ==========================================
 function updateLeaderboardUI() {
-    let listHTML = `<div class="lb-row"><span>${playerName} (Bạn)</span><span style="color:#00ffc8;">${killsCount} đ</span></div>`;
+    let playersList = [
+        { name: playerName + ' (Bạn)', kills: killsCount, isPlayer: true }
+    ];
+
     for (let id in otherPlayers) {
         let op = otherPlayers[id];
-        listHTML += `<div class="lb-row"><span>${op.name}</span><span style="color:#ff00ff;">${op.kills || 0} đ</span></div>`;
+        playersList.push({ name: op.name || 'Pilots', kills: op.kills || 0, isPlayer: false });
     }
+
+    // Sắp xếp giảm dần theo số điểm (kills)
+    playersList.sort((a, b) => b.kills - a.kills);
+
+    let listHTML = '';
+    playersList.forEach((p, index) => {
+        let crown = (index === 0) ? '👑 ' : '';
+        let colorStyle = (index === 0) ? 'color:#ffe94d; font-weight:bold;' : 'color:#fff;';
+        let scoreColor = p.isPlayer ? '#00ffc8' : '#ff00ff';
+        
+        listHTML += `<div class="lb-row" style="${colorStyle}"><span>${crown}${p.name}</span><span style="color:${scoreColor};">${p.kills} đ</span></div>`;
+    });
+
     document.getElementById('lbContent').innerHTML = listHTML;
 }
 
@@ -591,6 +658,7 @@ function showMsg(text, sec) {
 }
 
 const input = { left: false, right: false, firePressed: false };
+let isFiring = false;
 
 window.addEventListener('keydown', e => {
     let k = e.key.toLowerCase();
@@ -598,12 +666,20 @@ window.addEventListener('keydown', e => {
     if (k === 'd') input.right = true;
     if (k === 'w' && helicopter) helicopter.speed = Math.min(helicopter.maxSpeed, helicopter.speed + 0.2);
     if (k === 's' && helicopter) helicopter.speed = Math.max(-0.2, helicopter.speed - 0.2);
-    if (e.code === 'Space') { e.preventDefault(); input.firePressed = true; fireBullet(); }
+    if (e.code === 'Space') { 
+        e.preventDefault(); 
+        input.firePressed = true; 
+        isFiring = true;
+        shootBullet(); 
+    }
 });
 window.addEventListener('keyup', e => {
     let k = e.key.toLowerCase();
     if (k === 'a') input.left = false;
     if (k === 'd') input.right = false;
+    if (e.code === 'Space') {
+        isFiring = false;
+    }
 });
 
 function bindHold(el, onDown, onUp) {
@@ -624,7 +700,19 @@ bindHold(document.getElementById('btnA'), () => input.left = true, () => input.l
 bindHold(document.getElementById('btnD'), () => input.right = true, () => input.right = false);
 bindTap(document.getElementById('btnSpeedUp'), () => { if (helicopter) helicopter.speed = Math.min(helicopter.maxSpeed, helicopter.speed + 0.25); });
 bindTap(document.getElementById('btnSpeedDown'), () => { if (helicopter) helicopter.speed = Math.max(-0.2, helicopter.speed - 0.25); });
-bindTap(document.getElementById('btnFire'), () => { if (!state.running) return; input.firePressed = true; fireBullet(); });
+
+// ==========================================
+// CẬP NHẬT 3: HỖ TRỢ GIỮ CHẶT NÚT FIRE (RAPID FIRE)
+// ==========================================
+const fireBtn = document.getElementById('btnFire');
+bindHold(fireBtn, () => {
+    if (!state.running) return;
+    input.firePressed = true;
+    isFiring = true;
+    shootBullet();
+}, () => {
+    isFiring = false;
+});
 
 function startGame(mode) {
     initAudio();
