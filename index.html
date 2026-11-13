@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Helicopter vs Tanks - Battle Arena</title>
+<title>Avatar Jet vs Tanks - Battle Arena</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
 html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:Arial,sans-serif; }
@@ -67,7 +67,7 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
     box-shadow: 0 0 10px rgba(0,255,204,0.3); text-align: left;
 }
 
-/* OVERLAY SẢNH CHỜ */
+/* OVERLAY SẢNH CHỜ CHỌN QUỐC GIA */
 #overlay {
     position:fixed; inset:0; background:rgba(10,25,40,0.96);
     display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -76,11 +76,10 @@ html, body { width:100%; height:100%; overflow:hidden; background:#000; font-fam
 #overlay h1 { font-size:24px; color:#ffe94d; margin-bottom:10px; }
 .class-grid { display:flex; gap:12px; margin:12px 0; flex-wrap:wrap; justify-content:center; }
 .class-card {
-    border:2px solid #444; background:#152238; padding:10px; border-radius:10px;
+    border:2px solid #444; background:#152238; padding:12px; border-radius:10px;
     cursor:pointer; text-align:center; width:150px; transition:0.2s;
 }
 .class-card.selected { border-color:#00ffcc; background:#1e3557; box-shadow:0 0 12px rgba(0,255,204,0.4); }
-progress { width:100%; height:6px; accent-color:#00ffcc; }
 #overlay input { padding:8px; font-size:15px; width:200px; text-align:center; border-radius:8px; border:none; margin:8px 0; }
 
 .mode-buttons { display:flex; gap:15px; margin-top:15px; }
@@ -125,28 +124,25 @@ progress { width:100%; height:6px; accent-color:#00ffcc; }
 <div id="btnFire">FIRE</div>
 
 <div id="overlay">
-    <h1>🚁 TRỰC THĂNG VS XE TĂNG NÚI</h1>
-    <p style="font-size:13px; color:#aaa;">Chọn máy bay và hình thức chiến đấu</p>
+    <h1>🌐 CHỌN QUỐC GIA & PHI THUYỀN AVATAR</h1>
+    <p style="font-size:13px; color:#aaa;">Chọn màu sắc quốc gia biểu trưng cho phi thuyền của bạn</p>
     
     <div class="class-grid">
-        <div class="class-card selected" onclick="selectClass('speed', this)">
-            <h3 style="color:#00ffcc; font-size:14px;">Speed Striker</h3>
-            <p style="font-size:10px; color:#88a;">Hạng nhẹ: Bay nhanh, 4 phát</p>
-            <p style="font-size:10px; margin-top:4px;">Tốc độ: <progress value="95" max="100"></progress></p>
+        <div class="class-card selected" onclick="selectCountry('VN', '#da251d', '#ffeb00', this)">
+            <h3 style="color:#ffeb00; font-size:14px;">🇻🇳 Việt Nam</h3>
+            <p style="font-size:10px; color:#88a;">Đỏ cờ sắc vàng</p>
         </div>
-        <div class="class-card" onclick="selectClass('heavy', this)">
-            <h3 style="color:#ff6b6b; font-size:14px;">Heavy Gunner</h3>
-            <p style="font-size:10px; color:#88a;">Hạng nặng: Bay chậm, 1 phát</p>
-            <p style="font-size:10px; margin-top:4px;">Tốc độ: <progress value="45" max="100"></progress></p>
+        <div class="class-card" onclick="selectCountry('USA', '#3c3b6e', '#b22234', this)">
+            <h3 style="color:#38bdf8; font-size:14px;">🇺🇸 Hợp Chủng Quốc</h3>
+            <p style="font-size:10px; color:#88a;">Xanh dương & Đỏ</p>
         </div>
-        <div class="class-card" onclick="selectClass('tracker', this)">
-            <h3 style="color:#ffe94d; font-size:14px;">Missile Tracker</h3>
-            <p style="font-size:10px; color:#88a;">Trung bình: 2 phát</p>
-            <p style="font-size:10px; margin-top:4px;">Tốc độ: <progress value="70" max="100"></progress></p>
+        <div class="class-card" onclick="selectCountry('JP', '#bc002d', '#ffffff', this)">
+            <h3 style="color:#fff; font-size:14px;">🇯🇵 Nhật Bản</h3>
+            <p style="font-size:10px; color:#88a;">Mặt trời đỏ - trắng</p>
         </div>
     </div>
 
-    <input type="text" id="playerNameInput" placeholder="Nhập tên phi công..." value="Hoang Phong"><br>
+    <input type="text" id="playerNameInput" placeholder="Nhập tên phi công..." value="Hoài 👑 ✔️"><br>
     
     <div class="mode-buttons">
         <button class="mode-btn" id="btnTraining" onclick="startGame('training')">🪖 HUẤN LUYỆN ĐƠN</button>
@@ -176,16 +172,20 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-let chosenClass = 'speed';
+let selectedCountry = 'VN';
+let primaryColor = '#da251d';
+let secondaryColor = '#ffeb00';
 let playerName = 'Hoài 👑 ✔️';
 let gameMode = 'training';
 let socket = null;
 let otherPlayers = {};
 
-function selectClass(type, el) {
+function selectCountry(code, pColor, sColor, el) {
     document.querySelectorAll('.class-card').forEach(c => c.classList.remove('selected'));
     el.classList.add('selected');
-    chosenClass = type;
+    selectedCountry = code;
+    primaryColor = pColor;
+    secondaryColor = sColor;
 }
 
 const WORLD_WIDTH = 3500;
@@ -239,21 +239,17 @@ function beep(freq, dur, type, vol) {
 }
 
 function makeHelicopter() {
-    let maxSpd, hpReq;
-    if (chosenClass === 'speed') { maxSpd = 1.4; hpReq = 4; }
-    else if (chosenClass === 'heavy') { maxSpd = 0.7; hpReq = 1; }
-    else { maxSpd = 1.0; hpReq = 2; }
-
     return {
         x: baseIsland.x, y: baseIsland.y,
         angle: -Math.PI / 2,
         speed: 0,
-        maxSpeed: maxSpd,
-        damagePerHit: hpReq,
-        size: 24,
+        maxSpeed: 1.5,
+        damagePerHit: 1,
+        size: 26,
         landed: true,
-        classType: chosenClass,
-        name: playerName
+        name: playerName,
+        primaryColor: primaryColor,
+        secondaryColor: secondaryColor
     };
 }
 
@@ -268,7 +264,7 @@ function spawnTanks(n) {
             alive: true,
             color: i % 2 === 0 ? '#c0392b' : '#222',
             turretAngle: 0,
-            hp: helicopter ? helicopter.damagePerHit : 2,
+            hp: 2,
             shootTimer: Math.random() * 2
         });
     }
@@ -321,7 +317,6 @@ function update(dt) {
             h.x = Math.max(50, Math.min(WORLD_WIDTH - 50, h.x));
             h.y = Math.max(50, Math.min(WORLD_HEIGHT - 50, h.y));
 
-            // Gửi tọa độ lên server nếu ở chế độ multi
             if (socket && socket.connected) {
                 socket.emit('player_move', {
                     x: h.x, y: h.y, angle: h.angle, level: state.level
@@ -337,7 +332,7 @@ function update(dt) {
             if (!state.flowStarted) {
                 state.flowStarted = true;
                 spawnTanks(4 + state.level * 2);
-                showMsg('🎯 Cấp độ ' + state.level + ': Tiêu diệt toàn bộ xe tăng địch!', 2.5);
+                showMsg('🎯 Cấp độ ' + state.level + ': Tiêu diệt ít nhất 1 xe tăng địch để qua màn!', 2.5);
             }
         }
     }
@@ -393,10 +388,12 @@ function update(dt) {
                     killsCount++;
                     document.getElementById('lblKills').textContent = killsCount;
 
-                    if (tanks.length === 0) {
+                    // Cơ chế qua màn nghiêm ngặt: Phải tiêu diệt được ít nhất 1 kẻ địch mới cho phép lên cấp
+                    let allEnemiesDead = tanks.length === 0;
+                    if (allEnemiesDead && killsCount >= 1) {
                         state.level++;
                         document.getElementById('levelTxt').textContent = state.level;
-                        showMsg('🎉 QUA CẤP ĐỘ ' + state.level + '!', 2.5);
+                        showMsg('🎉 HOÀN THÀNH! LÊN CẤP ĐỘ ' + state.level + '!', 2.5);
                         setTimeout(() => {
                             spawnTanks(4 + state.level * 2);
                         }, 1500);
@@ -456,9 +453,8 @@ function render() {
         ctx.restore();
     }
 
-    if (helicopter) drawHelicopter(helicopter);
+    if (helicopter) drawAvatarJet(helicopter);
 
-    // VẼ CÁC ĐỒNG ĐỘI KHÁC KHI CHƠI MULTI
     for (let id in otherPlayers) {
         let p = otherPlayers[id];
         ctx.save();
@@ -469,7 +465,6 @@ function render() {
         ctx.beginPath(); ctx.ellipse(0, 0, s * 0.6, s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.restore();
 
-        // Tên đồng đội
         ctx.save();
         ctx.translate(p.x, p.y - 35);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; ctx.fillRect(-55, -14, 110, 18);
@@ -492,40 +487,70 @@ function render() {
     ctx.restore();
 }
 
-function drawHelicopter(h) {
+// HÀM VẼ PHI THUYỀN PHONG CÁCH PHIM AVATAR (2 cánh lớn sweep-back + đuôi sắc sảo)
+function drawAvatarJet(h) {
     ctx.save();
     ctx.translate(h.x, h.y);
     ctx.rotate(h.angle + Math.PI / 2);
     const s = h.size;
 
-    let speedFactor = Math.max(0.2, h.speed / h.maxSpeed);
-    let rotorSpeed = 25 / speedFactor; 
-    let rotorA = performance.now() / rotorSpeed;
+    // 1. Đuôi cánh nhỏ tinh tế phía sau
+    ctx.fillStyle = h.secondaryColor;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.3, s * 0.6);
+    ctx.lineTo(-s * 0.6, s * 1.1);
+    ctx.lineTo(-s * 0.1, s * 0.8);
+    ctx.closePath();
+    ctx.fill();
 
-    ctx.save();
-    ctx.rotate(rotorA);
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(-s * 1.3, 0); ctx.lineTo(s * 1.3, 0); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.3, s * 0.6);
+    ctx.lineTo(s * 0.6, s * 1.1);
+    ctx.lineTo(s * 0.1, s * 0.8);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. Hai cánh lớn sweeping góc cạnh phong cách phi thuyền Avatar
+    ctx.fillStyle = h.primaryColor;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.2); // Mũi phi thuyền nhọn
+    ctx.lineTo(-s * 1.3, s * 0.3); // Cánh trái
+    ctx.lineTo(-s * 0.3, s * 0.2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.2);
+    ctx.lineTo(s * 1.3, s * 0.3); // Cánh phải
+    ctx.lineTo(s * 0.3, s * 0.2);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Thân chính phi thuyền thon gọn
+    ctx.fillStyle = h.secondaryColor;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.3);
+    ctx.lineTo(-s * 0.3, s * 0.8);
+    ctx.lineTo(s * 0.3, s * 0.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Buồng lái phát sáng năng lượng ảo ảnh
+    ctx.fillStyle = "#38bdf8";
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = "#38bdf8";
+    ctx.beginPath();
+    ctx.ellipse(0, -s * 0.2, s * 0.15, s * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
 
-    ctx.fillStyle = h.classType === 'speed' ? '#1b4f72' : (h.classType === 'heavy' ? '#7d3c98' : '#b7950b');
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(0, 0, s * 0.6, s, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
-    ctx.fillStyle = '#333';
-    ctx.fillRect(-s * 0.2, s * 0.8, s * 0.4, s * 0.6);
-    let tailRotor = performance.now() / (10 * speedFactor);
+    // Tên phi công và cấp độ hiển thị trên đầu
     ctx.save();
-    ctx.translate(0, s * 1.4);
-    ctx.rotate(tailRotor);
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(-s * 0.3, 0); ctx.lineTo(s * 0.3, 0); ctx.stroke();
-    ctx.restore();
-
-    ctx.restore();
-
-    ctx.save();
-    ctx.translate(h.x, h.y - 35);
+    ctx.translate(h.x, h.y - 38);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(-65, -14, 130, 18);
     ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 1.5;
@@ -556,7 +581,6 @@ function drawRadar() {
         radarCtx.fillStyle = '#ff3b3b';
         radarCtx.fillRect(t.x * scaleX - 2, t.y * scaleY - 2, 4, 4);
     }
-    // Vẽ đồng đội trên radar
     for (let id in otherPlayers) {
         let p = otherPlayers[id];
         radarCtx.fillStyle = '#3498db';
@@ -619,9 +643,8 @@ function startGame(mode) {
     initAudio();
     gameMode = mode;
     
-    // Lấy tên từ input, nếu là "Hoang Phong" hoặc để trống hoặc bất kỳ tên nào khác -> Ép thành "Hoài 👑 ✔️" cho chính chủ!
     let rawInput = document.getElementById('playerNameInput').value.trim();
-    if (rawInput === 'Hoang Phong' || rawInput === '' || rawInput !== 'Hoài 👑 ✔️') {
+    if (rawInput === '' || rawInput !== 'Hoài 👑 ✔️') {
         playerName = 'Hoài 👑 ✔️';
     } else {
         playerName = rawInput;
@@ -638,10 +661,9 @@ function startGame(mode) {
     helicopter = makeHelicopter();
     tanks = []; bullets = []; tBullets = [];
 
-    // Kích hoạt kết nối Socket.io nếu chọn chế độ thực chiến đồng đội
     if (mode === 'multi') {
         socket = io();
-        socket.emit('join_game', { name: playerName, classType: chosenClass });
+        socket.emit('join_game', { name: playerName, country: selectedCountry });
         socket.on('update_players', (data) => {
             let myId = socket.id;
             otherPlayers = {};
