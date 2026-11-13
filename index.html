@@ -272,59 +272,101 @@ function spawnTanks(n) {
     }
 }
 
-// BẮN ĐẠN THEO CẤP ĐỘ
+// HỆ SỐ CẤP ĐỘ VÀ PHÂN THÂN
+function getLevelParameters(lvl) {
+    let baseLevel = ((lvl - 1) % 3) + 1;
+    let firePowerMultiplier = 0.7 + (baseLevel - 1) * 0.1;
+    
+    let wingmanCount = 0;
+    if (lvl >= 10) {
+        wingmanCount = 3 + Math.floor((lvl - 10) / 3);
+    } else if (lvl >= 7) {
+        wingmanCount = 2;
+    } else if (lvl >= 4) {
+        wingmanCount = 1;
+    } else {
+        wingmanCount = 0;
+    }
+    
+    return {
+        firePower: firePowerMultiplier,
+        wingman: wingmanCount
+    };
+}
+
+// BẮN ĐẠN THEO CẤP ĐỘ & PHÂN THÂN
 function shootBullet() {
     if (!helicopter || helicopter.landed) return;
     if (fireTimer > 0) return;
     fireTimer = (state.level >= 3) ? 0.09 : 0.18;
 
-    const b = helicopter.size + 10;
-    const spawnX = helicopter.x + Math.cos(helicopter.angle) * b;
-    const spawnY = helicopter.y + Math.sin(helicopter.angle) * b;
+    let config = getLevelParameters(state.level);
+    let wingmanCount = config.wingman;
+    let spawnPoints = [];
 
-    if (state.level === 1) {
-        bullets.push({
-            x: spawnX, y: spawnY,
-            vx: Math.cos(helicopter.angle) * 850,
-            vy: Math.sin(helicopter.angle) * 850,
-            life: 1.5, r: 4
+    const b = helicopter.size + 10;
+    let mainX = helicopter.x + Math.cos(helicopter.angle) * b;
+    let mainY = helicopter.y + Math.sin(helicopter.angle) * b;
+    spawnPoints.push({ x: mainX, y: mainY });
+
+    // Thêm vị trí phân thân nếu có từ cấp độ 4 trở lên
+    if (wingmanCount >= 1) {
+        let perp = helicopter.angle + Math.PI / 2;
+        spawnPoints.push({
+            x: helicopter.x - Math.cos(helicopter.angle) * 25 + Math.cos(perp) * 45,
+            y: helicopter.y - Math.sin(helicopter.angle) * 25 + Math.sin(perp) * 45
         });
-        beep(1100, 0.06, 'sawtooth', 0.05);
-    } 
-    else if (state.level === 2) {
-        let angles = [helicopter.angle, helicopter.angle - 0.2, helicopter.angle + 0.2];
-        for (let a of angles) {
+    }
+    if (wingmanCount >= 2) {
+        let perp = helicopter.angle + Math.PI / 2;
+        spawnPoints.push({
+            x: helicopter.x - Math.cos(helicopter.angle) * 25 - Math.cos(perp) * 45,
+            y: helicopter.y - Math.sin(helicopter.angle) * 25 - Math.sin(perp) * 45
+        });
+    }
+    if (wingmanCount >= 3) {
+        spawnPoints.push({
+            x: helicopter.x - Math.cos(helicopter.angle) * 60,
+            y: helicopter.y - Math.sin(helicopter.angle) * 60
+        });
+    }
+
+    // Bắn đạn từ máy bay chính và các phân thân đồng loạt
+    for (let pt of spawnPoints) {
+        if (state.level === 1) {
             bullets.push({
-                x: spawnX, y: spawnY,
-                vx: Math.cos(a) * 850,
-                vy: Math.sin(a) * 850,
+                x: pt.x, y: pt.y,
+                vx: Math.cos(helicopter.angle) * 850,
+                vy: Math.sin(helicopter.angle) * 850,
+                life: 1.5, r: 4
+            });
+        } else if (state.level === 2) {
+            let angles = [helicopter.angle, helicopter.angle - 0.2, helicopter.angle + 0.2];
+            for (let a of angles) {
+                bullets.push({
+                    x: pt.x, y: pt.y,
+                    vx: Math.cos(a) * 850,
+                    vy: Math.sin(a) * 850,
+                    life: 1.5, r: 4
+                });
+            }
+        } else {
+            let offset = 8;
+            let perpAngle = helicopter.angle + Math.PI / 2;
+            bullets.push({
+                x: pt.x + Math.cos(perpAngle) * offset, y: pt.y + Math.sin(perpAngle) * offset,
+                vx: Math.cos(helicopter.angle) * 900, vy: Math.sin(helicopter.angle) * 900,
+                life: 1.5, r: 4
+            });
+            bullets.push({
+                x: pt.x - Math.cos(perpAngle) * offset, y: pt.y - Math.sin(perpAngle) * offset,
+                vx: Math.cos(helicopter.angle) * 900, vy: Math.sin(helicopter.angle) * 900,
                 life: 1.5, r: 4
             });
         }
-        beep(1200, 0.08, 'sawtooth', 0.06);
-    } 
-    else {
-        let offset = 8;
-        let perpAngle = helicopter.angle + Math.PI / 2;
-        let leftX = spawnX + Math.cos(perpAngle) * offset;
-        let leftY = spawnY + Math.sin(perpAngle) * offset;
-        let rightX = spawnX - Math.cos(perpAngle) * offset;
-        let rightY = spawnY - Math.sin(perpAngle) * offset;
-
-        bullets.push({
-            x: leftX, y: leftY,
-            vx: Math.cos(helicopter.angle) * 900,
-            vy: Math.sin(helicopter.angle) * 900,
-            life: 1.5, r: 4
-        });
-        bullets.push({
-            x: rightX, y: rightY,
-            vx: Math.cos(helicopter.angle) * 900,
-            vy: Math.sin(helicopter.angle) * 900,
-            life: 1.5, r: 4
-        });
-        beep(1300, 0.05, 'sawtooth', 0.06);
     }
+
+    beep(1200, 0.06, 'sawtooth', 0.05);
 
     if (socket && socket.connected) {
         socket.emit('player_shoot', { x: helicopter.x, y: helicopter.y, angle: helicopter.angle });
@@ -389,7 +431,7 @@ function update(dt) {
         }
     }
 
-    // Cập nhật Tank địch & Tấn công người chơi
+    // Cập nhật Tank địch & Tấn công người chơi (Đã cân bằng hỏa lực qua getLevelParameters)
     for (let t of tanks) {
         if (!t.alive || !helicopter) continue;
         let angleToPl = Math.atan2(helicopter.y - t.y, helicopter.x - t.x);
@@ -397,12 +439,15 @@ function update(dt) {
 
         t.shootTimer -= dt;
         if (t.shootTimer <= 0) {
-            let fireInterval = Math.max(1.0, 1.8 - (state.level * 0.15));
+            let config = getLevelParameters(state.level);
+            let fireInterval = Math.max(1.0, (1.8 - (state.level * 0.15)) / config.firePower);
             t.shootTimer = fireInterval + Math.random() * 0.8;
+            
+            let bulletSpeed = (380 + state.level * 20) * config.firePower;
             tBullets.push({
                 x: t.x, y: t.y,
-                vx: Math.cos(angleToPl) * (380 + state.level * 20),
-                vy: Math.sin(angleToPl) * (380 + state.level * 20),
+                vx: Math.cos(angleToPl) * bulletSpeed,
+                vy: Math.sin(angleToPl) * bulletSpeed,
                 life: 2.5, r: 4
             });
             beep(300, 0.08, 'sawtooth', 0.04);
@@ -472,7 +517,7 @@ function update(dt) {
                 burst(helicopter.x, helicopter.y, '#ff3b3b', 8);
                 beep(220, 0.1, 'sawtooth', 0.08);
 
-                // Cạn HP -> Trừ 1 Level, hồi máu, tạo giằng co
+                // Cạn HP -> Trừ 1 Level, hồi máu
                 if (helicopter.hp <= 0) {
                     helicopter.hp = helicopter.maxHp;
                     if (state.level > 1) {
@@ -553,29 +598,52 @@ function render() {
     ctx.restore();
 }
 
-function drawAvatarJet(h) {
+function drawJetShape(colorPrimary, colorSecondary, scale = 1) {
     ctx.save();
-    ctx.translate(h.x, h.y);
-    ctx.rotate(h.angle + Math.PI / 2);
-    const s = h.size;
+    ctx.scale(scale, scale);
+    const s = 26;
 
-    ctx.fillStyle = h.secondaryColor;
+    ctx.fillStyle = colorSecondary;
     ctx.beginPath();
     ctx.moveTo(-s * 0.3, s * 0.6); ctx.lineTo(-s * 0.6, s * 1.1); ctx.lineTo(-s * 0.1, s * 0.8); ctx.closePath(); ctx.fill();
     ctx.beginPath();
     ctx.moveTo(s * 0.3, s * 0.6); ctx.lineTo(s * 0.6, s * 1.1); ctx.lineTo(s * 0.1, s * 0.8); ctx.closePath(); ctx.fill();
 
-    ctx.fillStyle = h.primaryColor;
+    ctx.fillStyle = colorPrimary;
     ctx.beginPath();
     ctx.moveTo(0, -s * 1.2); ctx.lineTo(-s * 1.3, s * 0.3); ctx.lineTo(-s * 0.3, s * 0.2); ctx.closePath(); ctx.fill();
     ctx.beginPath();
     ctx.moveTo(0, -s * 1.2); ctx.lineTo(s * 1.3, s * 0.3); ctx.lineTo(s * 0.3, s * 0.2); ctx.closePath(); ctx.fill();
 
-    ctx.fillStyle = h.secondaryColor; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    ctx.fillStyle = colorSecondary; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, -s * 1.3); ctx.lineTo(-s * 0.3, s * 0.8); ctx.lineTo(s * 0.3, s * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
 
-    ctx.fillStyle = "#38bdf8"; ctx.shadowBlur = 12; ctx.shadowColor = "#38bdf8";
+    ctx.fillStyle = "#38bdf8"; ctx.shadowBlur = 10; ctx.shadowColor = "#38bdf8";
     ctx.beginPath(); ctx.ellipse(0, -s * 0.2, s * 0.15, s * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+
+function drawAvatarJet(h) {
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    ctx.rotate(h.angle + Math.PI / 2);
+    
+    // Vẽ máy bay chính
+    drawJetShape(h.primaryColor, h.secondaryColor, 1);
+
+    // Vẽ đội hình phân thân (Wingman) theo cấp độ
+    let config = getLevelParameters(state.level);
+    let wingmanCount = config.wingman;
+    if (wingmanCount >= 1) {
+        ctx.save(); ctx.translate(-45, 25); drawJetShape(h.primaryColor, h.secondaryColor, 0.65); ctx.restore();
+    }
+    if (wingmanCount >= 2) {
+        ctx.save(); ctx.translate(45, 25); drawJetShape(h.primaryColor, h.secondaryColor, 0.65); ctx.restore();
+    }
+    if (wingmanCount >= 3) {
+        ctx.save(); ctx.translate(0, 60); drawJetShape(h.primaryColor, h.secondaryColor, 0.65); ctx.restore();
+    }
+
     ctx.restore();
 
     // Hiển thị Tên, Cấp độ và Thanh HP ngay trên máy bay
@@ -584,7 +652,6 @@ function drawAvatarJet(h) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(-65, -18, 130, 24);
     ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-65, -18, 130, 24);
     
-    // Thanh HP nhỏ
     let hpPercent = Math.max(0, h.hp / h.maxHp);
     ctx.fillStyle = '#333'; ctx.fillRect(-55, -4, 110, 4);
     ctx.fillStyle = hpPercent > 0.5 ? '#2ecc71' : (hpPercent > 0.2 ? '#f1c40f' : '#e74c3c');
@@ -600,20 +667,9 @@ function drawOtherAvatarJet(p) {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.rotate(p.angle + Math.PI / 2);
-    const s = 26;
     let pCol = p.primaryColor || '#3498db';
     let sCol = p.secondaryColor || '#ffffff';
-
-    ctx.fillStyle = sCol;
-    ctx.beginPath(); ctx.moveTo(-s*0.3, s*0.6); ctx.lineTo(-s*0.6, s*1.1); ctx.lineTo(-s*0.1, s*0.8); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(s*0.3, s*0.6); ctx.lineTo(s*0.6, s*1.1); ctx.lineTo(s*0.1, s*0.8); ctx.closePath(); ctx.fill();
-
-    ctx.fillStyle = pCol;
-    ctx.beginPath(); ctx.moveTo(0, -s*1.2); ctx.lineTo(-s*1.3, s*0.3); ctx.lineTo(-s*0.3, s*0.2); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(0, -s*1.2); ctx.lineTo(s*1.3, s*0.3); ctx.lineTo(s*0.3, s*0.2); ctx.closePath(); ctx.fill();
-
-    ctx.fillStyle = sCol; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, -s*1.3); ctx.lineTo(-s*0.3, s*0.8); ctx.lineTo(s*0.3, s*0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    drawJetShape(pCol, sCol, 1);
     ctx.restore();
 
     ctx.save();
